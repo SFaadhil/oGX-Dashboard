@@ -2,10 +2,14 @@
 -- AIESEC in India - oGX Talent Hub :: complete Supabase setup
 --
 -- Paste this whole file into the Supabase SQL editor and press Run.
--- It is idempotent: safe to run again after a schema change.
+-- Idempotent: safe to run again after a schema change.
+--
+-- The Supabase SQL editor runs the whole buffer as ONE transaction, so if
+-- any statement errors, nothing at all is applied. Fix the error and re-run.
 --
 -- Part 1 = base schema (tables, indexes, storage bucket, seed rows)
 -- Part 2 = EXPA sync additions (extra lead columns, sync_runs)
+-- Part 3 = your first sign-in account  <-- EDIT THIS, IT IS AT THE BOTTOM
 -- ============================================================================
 
 -- ############################ PART 1: BASE SCHEMA ###########################
@@ -199,13 +203,6 @@ create policy "lead_documents anon write"
   on storage.objects for insert
   with check (bucket_id = 'lead_documents');
 
--- ------------------------------------------------------------ first admin ---
--- Change the email and password before running, then sign in with them.
-insert into public.managers (first_name, last_name, email, password, key_area, ogt)
-values ('oGX', 'Admin', 'ogx.admin@aiesec.in', 'change-me', 'Administrator', 'oGT 1')
-on conflict (email) do nothing;
-
-
 -- ######################## PART 2: EXPA SYNC ADDITIONS #######################
 
 
@@ -286,3 +283,22 @@ create index if not exists sync_runs_started_idx on public.sync_runs (started_at
 alter table public.sync_runs disable row level security;
 
 -- The sync writes with the service-role key, which bypasses RLS anyway.
+
+-- ########################## PART 3: FIRST ADMIN #############################
+
+
+insert into public.managers (first_name, last_name, email, password, key_area, ogt)
+values (
+  'oGX',                       -- first name
+  'Admin',                     -- last name
+  'ogx.admin@aiesec.in',       -- email you will sign in with
+  'change-me',                 -- password you will sign in with
+  'Administrator',             -- keep as 'Administrator' or use 'LCVP oGX'
+  'oGT 1'
+)
+on conflict (email) do update
+  set first_name = excluded.first_name,
+      last_name  = excluded.last_name,
+      password   = excluded.password,
+      key_area   = excluded.key_area,
+      ogt        = excluded.ogt;

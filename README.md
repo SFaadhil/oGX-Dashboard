@@ -34,12 +34,21 @@ two values are real, so the app never white-screens while you are setting it up.
 
 ## Database
 
-`supabase/schema.sql` creates every table, index, storage bucket and seed row the
-app expects. Paste it into the Supabase SQL editor and run it once. It is
-idempotent, so re-running it is safe.
+Paste **`supabase/setup.sql`** into the Supabase SQL editor and run it. That one
+file is schema + EXPA sync additions + your first admin account, in that order.
+It is idempotent, so re-running it is safe.
 
-Change the email and password on the last statement before running - that row is
-the first account you sign in with.
+Edit **Part 3 at the bottom of the file** before running - that block is the
+first account you sign in with.
+
+> The Supabase SQL editor runs the whole buffer as a single transaction. If any
+> statement errors, *nothing* is applied - fix the error and run the file again.
+
+Run `supabase/verify.sql` afterwards to confirm what landed: it reports table
+count, the EXPA columns, the unique keys, the storage bucket and the seed rows.
+
+The individual migrations are also kept separately: `schema.sql` (base),
+`002_expa_sync.sql` (sync additions), `003_first_admin.sql` (login account).
 
 Tables: `managers`, `manager_profiles`, `leads`, `backgrounds`,
 `lead_backgrounds`, `lead_documents`, `lead_proofs`, `lead_notes`, `followups`,

@@ -191,9 +191,3 @@ drop policy if exists "lead_documents anon write" on storage.objects;
 create policy "lead_documents anon write"
   on storage.objects for insert
   with check (bucket_id = 'lead_documents');
-
--- ------------------------------------------------------------ first admin ---
--- Change the email and password before running, then sign in with them.
-insert into public.managers (first_name, last_name, email, password, key_area, ogt)
-values ('oGX', 'Admin', 'ogx.admin@aiesec.in', 'change-me', 'Administrator', 'oGT 1')
-on conflict (email) do nothing;
