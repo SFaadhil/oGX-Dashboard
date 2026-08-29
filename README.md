@@ -47,8 +47,15 @@ first account you sign in with.
 Run `supabase/verify.sql` afterwards to confirm what landed: it reports table
 count, the EXPA columns, the unique keys, the storage bucket and the seed rows.
 
-The individual migrations are also kept separately: `schema.sql` (base),
-`002_expa_sync.sql` (sync additions), `003_first_admin.sql` (login account).
+`setup.sql` is repair-capable as well as idempotent: it re-runs cleanly on an
+empty database, a fully built one, or one left half-finished by a failed run
+(it re-adds any missing columns rather than assuming `create table` did the
+job).
+
+The individual migrations are kept separately too: `schema.sql` (base),
+`002_expa_sync.sql` (sync additions), `003_first_admin.sql` (login account),
+`verify.sql` (health check) and `reset.sql` (**destructive** - drops every
+table; only for a clean slate before real data exists).
 
 Tables: `managers`, `manager_profiles`, `leads`, `backgrounds`,
 `lead_backgrounds`, `lead_documents`, `lead_proofs`, `lead_notes`, `followups`,

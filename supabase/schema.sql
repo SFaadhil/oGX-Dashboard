@@ -29,6 +29,19 @@ create table if not exists public.manager_profiles (
   updated_at       timestamptz not null default now()
 );
 
+-- If `managers` already existed from an earlier partial run, bring it up to
+-- spec. `create table if not exists` above will not add missing columns.
+alter table public.managers add column if not exists first_name      text;
+alter table public.managers add column if not exists last_name       text;
+alter table public.managers add column if not exists phone_number    text;
+alter table public.managers add column if not exists key_area        text;
+alter table public.managers add column if not exists ogt             text;
+alter table public.managers add column if not exists expa_id         text;
+alter table public.managers add column if not exists reports_to      uuid references public.managers(id) on delete set null;
+alter table public.managers add column if not exists profile_picture text;
+alter table public.managers add column if not exists last_login      timestamptz;
+alter table public.managers add column if not exists created_at      timestamptz not null default now();
+
 -- ------------------------------------------------------------- backgrounds --
 create table if not exists public.backgrounds (
   id   uuid primary key default gen_random_uuid(),
@@ -66,6 +79,35 @@ create table if not exists public.leads (
   created_at       timestamptz not null default now(),
   updated_at       timestamptz not null default now()
 );
+
+-- Same repair pass for `leads`.
+alter table public.leads add column if not exists lead_id           text;
+alter table public.leads add column if not exists expa_id           text;
+alter table public.leads add column if not exists first_name        text;
+alter table public.leads add column if not exists last_name         text;
+alter table public.leads add column if not exists full_name         text;
+alter table public.leads add column if not exists email             text;
+alter table public.leads add column if not exists phone_number      text;
+alter table public.leads add column if not exists gender            text;
+alter table public.leads add column if not exists date_of_birth     date;
+alter table public.leads add column if not exists university        text;
+alter table public.leads add column if not exists home_lc           text;
+alter table public.leads add column if not exists is_aiesecer       boolean default false;
+alter table public.leads add column if not exists product           text;
+alter table public.leads add column if not exists year_of_studies   text;
+alter table public.leads add column if not exists duration          text;
+alter table public.leads add column if not exists linkedin_url      text;
+alter table public.leads add column if not exists desired_regions   jsonb default '[]'::jsonb;
+alter table public.leads add column if not exists desired_countries jsonb default '[]'::jsonb;
+alter table public.leads add column if not exists start_date        date;
+alter table public.leads add column if not exists status            text default 'Not Contacted';
+alter table public.leads add column if not exists manager_id        uuid references public.managers(id) on delete set null;
+alter table public.leads add column if not exists assigned_on_expa  boolean default false;
+alter table public.leads add column if not exists show_in_cvpool    boolean default false;
+alter table public.leads add column if not exists feedback_status   text default 'pending';
+alter table public.leads add column if not exists manager_feedback  text;
+alter table public.leads add column if not exists created_at        timestamptz not null default now();
+alter table public.leads add column if not exists updated_at        timestamptz not null default now();
 
 create index if not exists leads_manager_idx  on public.leads (manager_id);
 create index if not exists leads_cvpool_idx   on public.leads (show_in_cvpool);
