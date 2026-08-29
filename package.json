@@ -1,0 +1,25 @@
+{
+  "name": "aiesec-india-ogx-dashboard",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "sync:expa": "node scripts/sync-expa.mjs",
+    "sync:expa:dry": "node scripts/sync-expa.mjs --dry-run",
+    "test": "node scripts/expa/map.test.mjs && node scripts/expa/sync.test.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-icons": "^5.3.0",
+    "react-router-dom": "^6.26.2"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "vite": "^5.4.8"
+  }
+}

@@ -1,0 +1,108 @@
+/* ============================================================
+   AIESEC in India - oGX Talent Hub design tokens
+   Brand: deep maroon #520305  /  signal yellow #fceb04
+   ============================================================ */
+:root {
+  /* Brand */
+  --primary: #520305;
+  --primary-dark: #360203;
+  --primary-darker: #240102;
+  --primary-light: #52030514;
+  --primary-soft: #5203051f;
+  --primary-tint: #f7eeee;
+
+  --accent: #fceb04;
+  --accent-dark: #d9c900;
+  --accent-light: #fceb0426;
+  --accent-tint: #fffce0;
+
+  /* Neutrals */
+  --black: #1a1a1a;
+  --gray-900: #2d2d2d;
+  --gray-800: #3a3a3a;
+  --gray-700: #4a4a4a;
+  --gray-600: #5a5a5a;
+  --gray-500: #6b6b6b;
+  --gray-400: #8a8a8a;
+  --gray-300: #d4d4d4;
+  --gray-200: #e5e5e5;
+  --gray-100: #f5f5f5;
+  --gray-50: #fafafa;
+  --white: #ffffff;
+
+  /* Semantic */
+  --success: #1b8a5a;
+  --success-light: #1b8a5a1a;
+  --warning: #b3730a;
+  --warning-light: #b3730a1a;
+  --danger: #b3261e;
+  --danger-light: #b3261e1a;
+  --info: #0b6bcb;
+  --info-light: #0b6bcb1a;
+  --linkedin: #0077b5;
+
+  /* Surfaces (light) */
+  --bg-app: #f6f4f2;
+  --surface: #ffffff;
+  --surface-2: #f5f5f5;
+  --surface-3: #fafafa;
+  --border: #d4d4d4;
+  --border-soft: #e5e5e5;
+  --text: #1a1a1a;
+  --text-muted: #5a5a5a;
+  --text-faint: #8a8a8a;
+
+  /* Shape + motion */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.875rem;
+  --radius-lg: 1.25rem;
+  --radius-pill: 2rem;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 8px 24px rgba(82, 3, 5, 0.14);
+  --transition: all 0.2s ease;
+
+  /* Layout */
+  --sidebar-width: 272px;
+  --header-height: 68px;
+}
+
+html.dark-mode,
+body.dark-mode {
+  --primary: #8c1418;
+  --primary-dark: #520305;
+  --primary-light: #8c141826;
+  --primary-soft: #8c141833;
+  --primary-tint: #2a0d0e;
+
+  --accent: #fceb04;
+  --accent-dark: #d9c900;
+  --accent-light: #fceb0426;
+  --accent-tint: #2c2a05;
+
+  --bg-app: #121212;
+  --surface: #1a1a1a;
+  --surface-2: #242424;
+  --surface-3: #202020;
+  --border: #333333;
+  --border-soft: #2d2d2d;
+  --text: #f5f5f5;
+  --text-muted: #b4b4b4;
+  --text-faint: #8a8a8a;
+
+  --white: #1a1a1a;
+  --black: #f5f5f5;
+  --gray-100: #242424;
+  --gray-200: #2d2d2d;
+  --gray-300: #3a3a3a;
+  --gray-400: #6b6b6b;
+  --gray-500: #9a9a9a;
+  --gray-600: #b4b4b4;
+  --gray-700: #d4d4d4;
+  --gray-800: #e5e5e5;
+  --gray-900: #f5f5f5;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.6);
+}

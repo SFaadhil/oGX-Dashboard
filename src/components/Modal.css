@@ -1,0 +1,59 @@
+.modal-overlay {
+  align-items: center;
+  animation: fadeIn 0.18s ease;
+  background: rgba(20, 6, 7, 0.55);
+  backdrop-filter: blur(3px);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 1.25rem;
+  position: fixed;
+  z-index: 900;
+}
+
+.modal-panel {
+  animation: slideDown 0.22s ease;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  width: 100%;
+}
+
+.modal-head {
+  align-items: center;
+  border-bottom: 1px solid var(--border-soft);
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  padding: 1.1rem 1.4rem;
+}
+.modal-head h3 { color: var(--text); font-size: 1rem; font-weight: 700; margin: 0; }
+
+.modal-close {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--border-soft);
+  border-radius: 50%;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  height: 32px;
+  justify-content: center;
+  transition: var(--transition);
+  width: 32px;
+}
+.modal-close:hover { background: var(--primary); border-color: var(--primary); color: #fff; }
+
+.modal-body { overflow-y: auto; padding: 1.4rem; }
+
+.modal-foot {
+  border-top: 1px solid var(--border-soft);
+  display: flex;
+  gap: 0.6rem;
+  justify-content: flex-end;
+  padding: 1rem 1.4rem;
+}

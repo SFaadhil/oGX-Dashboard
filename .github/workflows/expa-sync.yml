@@ -1,0 +1,47 @@
+name: EXPA sync
+
+# Pulls the day's AIESEC in India GTa/GTe applications into Supabase.
+# Hourly at :05, plus a manual trigger for backfills.
+on:
+  schedule:
+    - cron: '5 * * * *'
+  workflow_dispatch:
+    inputs:
+      since:
+        description: 'Window start (e.g. 6h, 3d, 2026-08-01). Blank = midnight today.'
+        required: false
+      mirror_cvs:
+        description: 'Copy CVs into Supabase Storage'
+        type: boolean
+        default: false
+
+concurrency:
+  group: expa-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Sync EXPA -> Supabase
+        env:
+          EXPA_ACCESS_TOKEN: ${{ secrets.EXPA_ACCESS_TOKEN }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          EXPA_HOME_MC: ${{ vars.EXPA_HOME_MC || '1585' }}
+          EXPA_PROGRAMMES: ${{ vars.EXPA_PROGRAMMES || '8,9' }}
+        run: |
+          ARGS=""
+          if [ -n "${{ inputs.since }}" ]; then ARGS="$ARGS --since ${{ inputs.since }}"; fi
+          if [ "${{ inputs.mirror_cvs }}" = "true" ]; then ARGS="$ARGS --mirror-cvs"; fi
+          node scripts/sync-expa.mjs $ARGS
