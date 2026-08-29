@@ -2,7 +2,7 @@
 // against stubs. No network, no real applicant data.
 // Run: node scripts/expa/sync.test.mjs
 import assert from 'node:assert/strict';
-import { resolveWindow, writePage, ensureBackgrounds, chunk } from './sync.mjs';
+import { resolveWindow, writePage, ensureBackgrounds, ensureManagers, chunk } from './sync.mjs';
 import { createExpaClient } from './client.mjs';
 import { mapApplication } from './map.mjs';
 
@@ -35,7 +35,7 @@ const app = (id, over = {}) => ({
     latest_academic: { organisation_name: 'Test University', start_date: '2024-08-01', end_date: '2028-06-01' },
     academic_experiences: [],
     latest_academic_experience_backgrounds: [],
-    managers: [],
+    managers: [{ id: '5001', full_name: 'Rohan Iyer', email: 'rohan@aiesec.in' }],
     person_profile: { backgrounds: [{ id: '11', name: 'Computer sciences' }], selected_programmes: [8] }
   },
   opportunity: {
@@ -51,7 +51,7 @@ const app = (id, over = {}) => ({
 });
 
 /** Minimal Supabase stub that records every call. */
-function stubSupabase({ existingLeads = [], existingBackgrounds = [] } = {}) {
+function stubSupabase({ existingLeads = [], existingBackgrounds = [], existingManagers = [] } = {}) {
   const calls = { updates: [], upserts: [], inserts: [], storage: [] };
   let leadSeq = 1000;
 
@@ -76,11 +76,12 @@ function stubSupabase({ existingLeads = [], existingBackgrounds = [] } = {}) {
         calls.upserts.push({ table: name, rows, options });
         const made = (Array.isArray(rows) ? rows : [rows]).map((r) => ({
           ...r,
-          id: r.id || `${name === 'backgrounds' ? 'bg' : 'lead'}-${leadSeq++}`
+          id: r.id || `${name === 'backgrounds' ? 'bg' : name === 'managers' ? 'mgr' : 'lead'}-${leadSeq++}`
         }));
         // Persist so a later read sees the row, the way Postgres would.
         if (name === 'backgrounds') existingBackgrounds.push(...made);
         if (name === 'leads') existingLeads.push(...made);
+        if (name === 'managers') existingManagers.push(...made);
         const res = { data: options?.ignoreDuplicates ? null : made, error: null };
         return { select: () => Promise.resolve(res), then: (fn) => Promise.resolve(res).then(fn) };
       },
@@ -225,7 +226,7 @@ await t('new applications are inserted with safe defaults', async () => {
   assert.equal(leadUpsert.rows[0].product, 'GTa');
 });
 
-await t('existing leads keep manager, status and pool visibility', async () => {
+await t('existing leads keep status and pool visibility, but track EXPA', async () => {
   const supabase = stubSupabase({
     existingLeads: [{ id: 'lead-a', expa_application_id: '7001' }]
   });
@@ -237,8 +238,15 @@ await t('existing leads keep manager, status and pool visibility', async () => {
 
   const upd = supabase.calls.updates.find((u) => u.table === 'leads');
   assert.equal(upd.id, 'lead-a');
-  ['manager_id', 'status', 'show_in_cvpool']
+
+  // `status` and `show_in_cvpool` are decided outside EXPA, so a re-sync must
+  // never reset them.
+  ['status', 'show_in_cvpool']
     .forEach((k) => assert.ok(!(k in upd.values), `update must not touch ${k}`));
+
+  // `manager_id` IS owned by EXPA: if the EP is reassigned there, follow it.
+  assert.ok('manager_id' in upd.values, 'update must refresh manager_id');
+
   assert.equal(upd.values.expa_status, 'open');
   assert.ok(upd.values.synced_at);
 });
@@ -327,6 +335,56 @@ await t('a failed CV mirror is recorded but does not abort the page', async () =
 
 await t('batches are chunked', () => {
   assert.equal(chunk(new Array(450).fill(0), 200).length, 3);
+});
+
+console.log('\nEP managers');
+await t('EXPA managers are upserted on expa_id and linked to the lead', async () => {
+  const supabase = stubSupabase();
+  const mapped = [app('7001'), app('7002')].map(mapApplication);
+  await writePage(supabase, mapped, { token: 't' });
+
+  const mgr = supabase.calls.upserts.find((c) => c.table === 'managers');
+  assert.ok(mgr, 'managers must be upserted');
+  assert.equal(mgr.options.onConflict, 'expa_id');
+  assert.equal(mgr.rows.length, 1, 'the shared manager is upserted once, not once per lead');
+  assert.equal(mgr.rows[0].expa_id, '5001');
+  assert.equal(mgr.rows[0].first_name, 'Rohan');
+  assert.equal(mgr.rows[0].last_name, 'Iyer');
+
+  const leadUpsert = supabase.calls.upserts.find((c) => c.table === 'leads');
+  assert.ok(leadUpsert.rows[0].manager_id, 'the lead must carry a resolved manager_id');
+});
+
+await t('an application with no EXPA manager leaves manager_id null', async () => {
+  const supabase = stubSupabase();
+  const solo = app('7009');
+  solo.person.managers = [];
+  await writePage(supabase, [mapApplication(solo)], { token: 't' });
+
+  const leadUpsert = supabase.calls.upserts.find((c) => c.table === 'leads');
+  assert.equal(leadUpsert.rows[0].manager_id, null);
+  assert.ok(!supabase.calls.upserts.find((c) => c.table === 'managers'));
+});
+
+await t('a manager upsert failure is recorded without losing the leads', async () => {
+  const supabase = stubSupabase();
+  const original = supabase.from;
+  supabase.from = (name) => {
+    if (name !== 'managers') return original(name);
+    return {
+      upsert: () => ({ select: () => Promise.resolve({ data: null, error: { message: 'boom' } }) })
+    };
+  };
+
+  const stats = await writePage(supabase, [mapApplication(app('7001'))], { token: 't' });
+  assert.ok(stats.errors.some((e) => e.includes('manager upsert failed')));
+  assert.equal(stats.inserted, 1, 'the lead itself still lands');
+});
+
+await t('ensureManagers returns an empty map when nobody is named', async () => {
+  const supabase = stubSupabase();
+  const map = await ensureManagers(supabase, [{ managers: [] }], { errors: [] });
+  assert.equal(map.size, 0);
 });
 
 console.log(`\n${passed} test(s) passed`);

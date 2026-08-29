@@ -10,7 +10,7 @@
 -- statement errors, nothing at all is applied. Fix it and run again.
 --
 -- Part 1 = base schema (tables, columns, indexes, storage bucket, seeds)
--- Part 2 = EXPA sync additions (extra lead columns, sync_runs)
+-- Part 2 = EXPA sync additions (lead columns, manager keys, sync_runs)
 -- Part 3 = public read-only lockdown (RLS + revoked write grants)
 --
 -- There is no login and no admin account to create. Everything is public
@@ -228,6 +228,17 @@ alter table public.lead_documents
   drop constraint if exists lead_documents_lead_type_source_key;
 alter table public.lead_documents
   add constraint lead_documents_lead_type_source_key unique (lead_id, doc_type, source);
+
+-- ------------------------------------------------------------- EP managers --
+-- The sync upserts each applicant's EP manager straight from EXPA, keyed on
+-- their EXPA person id. Email is not always present on those records, so it
+-- cannot stay NOT NULL.
+alter table public.managers alter column email drop not null;
+alter table public.managers drop constraint if exists managers_email_key;
+create unique index if not exists managers_email_key
+  on public.managers (email) where email is not null;
+create unique index if not exists managers_expa_id_key
+  on public.managers (expa_id) where expa_id is not null;
 
 -- ------------------------------------------------------------- sync runs ----
 create table if not exists public.sync_runs (

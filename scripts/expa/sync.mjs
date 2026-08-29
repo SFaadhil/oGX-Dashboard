@@ -63,6 +63,44 @@ export async function ensureBackgrounds(supabase, names) {
   return byLower;
 }
 
+/**
+ * Upsert the EP managers EXPA named on this page, keyed on their EXPA person
+ * id, and return a map of expa_id -> managers.id.
+ */
+export async function ensureManagers(supabase, mapped, stats) {
+  const byExpaId = new Map();
+
+  const wanted = new Map();
+  mapped.forEach((m) => {
+    (m.managers || []).forEach((mg) => {
+      if (mg.expa_id) wanted.set(mg.expa_id, mg);
+    });
+  });
+  if (!wanted.size) return byExpaId;
+
+  const payload = [...wanted.values()].map((mg) => {
+    const parts = String(mg.full_name || '').trim().split(/\s+/).filter(Boolean);
+    return {
+      expa_id: mg.expa_id,
+      first_name: parts[0] || null,
+      last_name: parts.slice(1).join(' ') || null,
+      email: mg.email || null
+    };
+  });
+
+  const { data, error } = await supabase
+    .from('managers')
+    .upsert(payload, { onConflict: 'expa_id' })
+    .select('id, expa_id');
+
+  if (error) {
+    stats?.errors?.push(`manager upsert failed: ${error.message}`);
+    return byExpaId;
+  }
+  (data || []).forEach((r) => r.expa_id && byExpaId.set(r.expa_id, r.id));
+  return byExpaId;
+}
+
 export async function mirrorCv(supabase, bucket, token, cvUrl, applicationId, fetchImpl = fetch) {
   const url = cvUrl.includes('access_token')
     ? cvUrl
@@ -107,6 +145,15 @@ export async function writePage(supabase, mapped, opts = {}) {
 
   const leadIdByExpa = new Map((existing || []).map((r) => [r.expa_application_id, r.id]));
   const isNew = (m) => !leadIdByExpa.has(m.expaFields.expa_application_id);
+
+  // --- EP managers ---------------------------------------------------------
+  // EXPA owns the assignment, so resolve it first and fold manager_id into
+  // every lead payload below.
+  const managerIdByExpa = await ensureManagers(supabase, mapped, stats);
+  mapped.forEach((m) => {
+    const expaManagerId = m.managers[0]?.expa_id;
+    m.expaFields.manager_id = expaManagerId ? managerIdByExpa.get(expaManagerId) || null : null;
+  });
 
   // --- inserts -------------------------------------------------------------
   const newOnes = mapped.filter(isNew);

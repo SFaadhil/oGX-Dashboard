@@ -55,6 +55,17 @@ alter table public.lead_documents
 alter table public.lead_documents
   add constraint lead_documents_lead_type_source_key unique (lead_id, doc_type, source);
 
+-- ------------------------------------------------------------- EP managers --
+-- The sync upserts each applicant's EP manager straight from EXPA, keyed on
+-- their EXPA person id. Email is not always present on those records, so it
+-- cannot stay NOT NULL.
+alter table public.managers alter column email drop not null;
+alter table public.managers drop constraint if exists managers_email_key;
+create unique index if not exists managers_email_key
+  on public.managers (email) where email is not null;
+create unique index if not exists managers_expa_id_key
+  on public.managers (expa_id) where expa_id is not null;
+
 -- ------------------------------------------------------------- sync runs ----
 create table if not exists public.sync_runs (
   id            uuid primary key default gen_random_uuid(),
