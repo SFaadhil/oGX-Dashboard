@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
-  FiSearch, FiX, FiLock, FiInbox, FiEye, FiRefreshCw, FiArrowLeft, FiUsers
+  FiSearch, FiX, FiInbox, FiEye, FiRefreshCw, FiArrowLeft, FiUsers
 } from 'react-icons/fi';
-import { useAuth } from '../context/AuthContext';
 import { fetchLeads, fetchManagers } from '../lib/leadsApi';
 import { fullName, formatDate, initials, percent } from '../lib/helpers';
 import { STATUS_TONE, PRODUCTS, LEAD_STATUSES } from '../constants';
@@ -14,7 +13,6 @@ import { STATUS_TONE, PRODUCTS, LEAD_STATUSES } from '../constants';
  */
 export default function TeamLeads({ scope = 'all' }) {
   const { memberId } = useParams();
-  const { isTeamLeader } = useAuth();
 
   const [leads, setLeads] = useState([]);
   const [managers, setManagers] = useState([]);
@@ -24,20 +22,18 @@ export default function TeamLeads({ scope = 'all' }) {
   const [status, setStatus] = useState('');
   const [managerFilter, setManagerFilter] = useState('');
 
-  const denied = scope === 'all' && !isTeamLeader;
 
   const load = useCallback(async () => {
-    if (denied) { setLoading(false); return; }
     setLoading(true);
     const { rows } = await fetchLeads({
       filter: (q) => (scope === 'member' && memberId ? q.eq('manager_id', memberId) : q),
       withBackgrounds: false
     });
     setLeads(rows);
-    const { rows: mgrs } = await fetchManagers('id, first_name, last_name, email, key_area, ogt, reports_to');
+    const { rows: mgrs } = await fetchManagers('id, first_name, last_name, email, key_area, ogt');
     setManagers(mgrs);
     setLoading(false);
-  }, [scope, memberId, denied]);
+  }, [scope, memberId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -66,14 +62,6 @@ export default function TeamLeads({ scope = 'all' }) {
     const applied = filtered.filter((l) => ['Applied', 'Approved'].includes(l.status)).length;
     return { total, contacted, applied, rate: percent(applied, total) };
   }, [filtered]);
-
-  if (denied) {
-    return (
-      <div className="access-denied">
-        <FiLock /><h3>Access Denied</h3><p>Only VPs and team leaders can access this page.</p>
-      </div>
-    );
-  }
 
   const title = scope === 'member'
     ? `${member ? [member.first_name, member.last_name].filter(Boolean).join(' ') : 'Team member'} - Leads`
@@ -165,7 +153,7 @@ export default function TeamLeads({ scope = 'all' }) {
                 <tr>
                   <th>Name</th><th>Product</th><th>Status</th>
                   {scope === 'all' && <th>Manager</th>}
-                  <th>University</th><th>EXPA</th><th>Created</th><th style={{ width: 60 }}>View</th>
+                  <th>University</th><th>Destination</th><th>Applied</th><th style={{ width: 60 }}>View</th>
                 </tr>
               </thead>
               <tbody>
@@ -196,9 +184,7 @@ export default function TeamLeads({ scope = 'all' }) {
                     )}
                     <td>{l.university || '-'}</td>
                     <td>
-                      <span className={`badge ${l.assigned_on_expa ? 'badge-success' : 'badge-warning'}`}>
-                        {l.assigned_on_expa ? 'Assigned' : 'Pending'}
-                      </span>
+<span className="badge badge-neutral">{l.host_mc || '-'}</span>
                     </td>
                     <td>{formatDate(l.created_at) || '-'}</td>
                     <td>

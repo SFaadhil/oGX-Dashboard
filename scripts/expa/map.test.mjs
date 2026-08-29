@@ -163,7 +163,7 @@ t('new-lead defaults keep the applicant out of the public pool', () => {
   assert.equal(m.defaults.status, 'Not Contacted');
 });
 t('EXPA fields never include locally-managed columns', () => {
-  ['manager_id', 'status', 'show_in_cvpool', 'feedback_status', 'manager_feedback', 'assigned_on_expa']
+  ['manager_id', 'status', 'show_in_cvpool']
     .forEach((k) => assert.ok(!(k in m.expaFields), `${k} must not be EXPA-owned`));
 });
 t('name split when only full_name is present', () => {
@@ -172,6 +172,21 @@ t('name split when only full_name is present', () => {
   }));
   assert.equal(only.expaFields.first_name, 'Kabir');
   assert.equal(only.expaFields.last_name, 'Singh Verma');
+});
+
+console.log('publish switch');
+t('defaults keep applicants off the public pool', () => {
+  assert.equal(mapApplication(application()).defaults.show_in_cvpool, false);
+});
+t('publishToPool opts new applicants in', () => {
+  assert.equal(mapApplication(application(), { publishToPool: true }).defaults.show_in_cvpool, true);
+});
+t('publishToPool never becomes an EXPA-owned column', () => {
+  const withPublish = mapApplication(application(), { publishToPool: true });
+  assert.ok(
+    !('show_in_cvpool' in withPublish.expaFields),
+    'a re-sync must never flip an existing lead into the pool'
+  );
 });
 
 console.log(`\n${passed} assertion group(s) passed`);

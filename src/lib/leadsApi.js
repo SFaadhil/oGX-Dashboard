@@ -4,17 +4,17 @@ export const LEAD_COLUMNS = `
   id, lead_id, first_name, last_name, full_name, email, phone_number, university,
   product, year_of_studies, linkedin_url, desired_regions, desired_countries,
   duration, start_date, status, gender, date_of_birth, home_lc, is_aiesecer,
-  show_in_cvpool, assigned_on_expa, expa_id, manager_id, feedback_status,
-  manager_feedback, created_at, updated_at,
+  show_in_cvpool, manager_id, created_at, updated_at,
   expa_application_id, expa_person_id, expa_status, sub_product,
   opportunity_id, opportunity_title, host_lc, host_mc, host_mc_country,
   experience_end_date, applied_at, synced_at, source
 `;
 
-const MANAGER_JOIN = 'manager:manager_id (id, first_name, last_name, email, phone_number, key_area, ogt, expa_id)';
+const MANAGER_JOIN = 'manager:manager_id (id, first_name, last_name, email, phone_number, key_area, ogt)';
 
 /**
  * Fetch leads with the manager join plus the background / document side tables.
+ * Read-only: nothing in this module writes.
  * `filter` receives the query builder so callers can scope by manager, status, etc.
  */
 export async function fetchLeads({ filter, withBackgrounds = true, withDocuments = true } = {}) {
@@ -64,7 +64,7 @@ export async function fetchLeads({ filter, withBackgrounds = true, withDocuments
   };
 }
 
-export async function fetchManagers(select = 'id, first_name, last_name, email, phone_number, key_area, ogt, expa_id, reports_to, profile_picture, last_login') {
+export async function fetchManagers(select = 'id, first_name, last_name, email, phone_number, key_area, ogt, profile_picture') {
   if (!isSupabaseConfigured) return { rows: [], error: 'Supabase is not configured.' };
   const { data, error } = await supabase.from('managers').select(select).order('first_name');
   return { rows: data || [], error: error?.message || null };
@@ -74,21 +74,4 @@ export async function fetchBackgrounds() {
   if (!isSupabaseConfigured) return { rows: [], error: 'Supabase is not configured.' };
   const { data, error } = await supabase.from('backgrounds').select('id, name').order('name');
   return { rows: data || [], error: error?.message || null };
-}
-
-export async function setLeadBackgrounds(leadId, backgroundIds) {
-  await supabase.from('lead_backgrounds').delete().eq('lead_id', leadId);
-  if (!backgroundIds.length) return;
-  await supabase
-    .from('lead_backgrounds')
-    .insert(backgroundIds.map((background_id) => ({ lead_id: leadId, background_id })));
-}
-
-export async function logAction(managerId, action, details) {
-  if (!isSupabaseConfigured || !managerId) return;
-  await supabase.from('action_logs').insert({
-    manager_id: managerId,
-    action,
-    details: typeof details === 'string' ? details : JSON.stringify(details || {})
-  });
 }

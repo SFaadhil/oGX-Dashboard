@@ -1,8 +1,8 @@
 // EXPA application -> `leads` row.
 //
-// Everything here is EXPA-owned. Locally-managed columns (manager_id, status,
-// show_in_cvpool, feedback_status, manager_feedback, assigned_on_expa) are
-// deliberately absent so an hourly re-sync can never trample the team's work.
+// `expaFields` is what EXPA owns and what every re-sync refreshes. `defaults`
+// is written only when a lead is first seen, so a later run never resets
+// anything that was changed after the fact.
 
 import { PROGRAMME_PRODUCT } from './client.mjs';
 
@@ -133,25 +133,27 @@ export function expaFieldsFor(application) {
   };
 }
 
-/** Extra columns set only when the row is first created. */
-export function defaultsForNewLead(application) {
+/**
+ * Extra columns set only when the row is first created.
+ *
+ * `publishToPool` decides whether new applicants appear on the public /cv-pool
+ * page. It is off unless EXPA_PUBLISH_TO_POOL=true, so publishing is always a
+ * deliberate act rather than a side effect of the sync.
+ */
+export function defaultsForNewLead(application, { publishToPool = false } = {}) {
   return {
     status: 'Not Contacted',
-    feedback_status: 'pending',
-    assigned_on_expa: false,
-    // Never publish an applicant to the public pool automatically - someone on
-    // the team opts each lead in from the dashboard.
-    show_in_cvpool: false,
+    show_in_cvpool: Boolean(publishToPool),
     desired_regions: [],
     desired_countries: [],
     created_at: application.created_at || new Date().toISOString()
   };
 }
 
-export function mapApplication(application) {
+export function mapApplication(application, options = {}) {
   return {
     expaFields: expaFieldsFor(application),
-    defaults: defaultsForNewLead(application),
+    defaults: defaultsForNewLead(application, options),
     backgroundNames: backgroundNamesFor(application.person),
     cvUrl: cvUrlFor(application),
     managers: (application.person?.managers || []).map((m) => ({

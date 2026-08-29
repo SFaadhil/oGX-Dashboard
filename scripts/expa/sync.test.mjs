@@ -237,7 +237,7 @@ await t('existing leads keep manager, status and pool visibility', async () => {
 
   const upd = supabase.calls.updates.find((u) => u.table === 'leads');
   assert.equal(upd.id, 'lead-a');
-  ['manager_id', 'status', 'show_in_cvpool', 'feedback_status', 'manager_feedback', 'assigned_on_expa']
+  ['manager_id', 'status', 'show_in_cvpool']
     .forEach((k) => assert.ok(!(k in upd.values), `update must not touch ${k}`));
   assert.equal(upd.values.expa_status, 'open');
   assert.ok(upd.values.synced_at);

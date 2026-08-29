@@ -17,6 +17,7 @@ Usage: node scripts/sync-expa.mjs [options]
   --full                      every application, all time (slow)
   --dry-run                   fetch and map, write nothing
   --mirror-cvs                copy each CV into Supabase Storage
+  --publish                   make new applicants visible on the public CV pool
   --per-page <n>              EXPA page size (default 100)
   --help                      show this
 
@@ -26,6 +27,7 @@ Environment:
   SUPABASE_SERVICE_ROLE_KEY   required unless --dry-run
   EXPA_HOME_MC                default 1585 (AIESEC in India)
   EXPA_PROGRAMMES             default 8,9  (GTa, GTe)
+  EXPA_PUBLISH_TO_POOL        'true' to publish new applicants to /cv-pool
   SUPABASE_BUCKET             default lead_documents
 `;
 
@@ -36,6 +38,7 @@ function parseArgs(argv) {
     if (a === '--dry-run') args.dryRun = true;
     else if (a === '--full') args.full = true;
     else if (a === '--mirror-cvs') args.mirrorCvs = true;
+    else if (a === '--publish') args.publish = true;
     else if (a === '--since') args.since = argv[++i];
     else if (a === '--until') args.until = argv[++i];
     else if (a === '--per-page') args.perPage = Number(argv[++i]) || 100;
@@ -60,6 +63,7 @@ async function main() {
   const programmes = (process.env.EXPA_PROGRAMMES || `${PROGRAMMES.GTa},${PROGRAMMES.GTe}`)
     .split(',').map((s) => Number(s.trim())).filter(Boolean);
   const bucket = process.env.SUPABASE_BUCKET || 'lead_documents';
+  const publishToPool = args.publish || process.env.EXPA_PUBLISH_TO_POOL === 'true';
 
   const who = await createExpaClient({ token }).whoAmI();
   log(`authenticated as ${who.full_name} (${who.email})`);
@@ -67,6 +71,7 @@ async function main() {
   const win = resolveWindow(args);
   log(`window: ${win.label}${win.from ? ` (${win.from.toISOString()} -> ${win.to.toISOString()})` : ''}`);
   log(`filters: home MC ${homeMc}, programmes [${programmes.join(', ')}]`);
+  log(`new applicants ${publishToPool ? 'WILL' : 'will not'} be published to the public CV pool`);
 
   let supabase = null;
   let runId = null;
@@ -119,6 +124,7 @@ async function main() {
       perPage: args.perPage,
       dryRun: args.dryRun,
       mirrorCvs: args.mirrorCvs,
+      publishToPool,
       bucket,
       onProgress: (p) => log(`page ${p.page}/${p.totalPages} - ${p.fetched}/${p.totalItems} fetched`)
     });

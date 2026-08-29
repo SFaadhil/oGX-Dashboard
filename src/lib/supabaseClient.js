@@ -24,14 +24,3 @@ export function publicFileUrl(path) {
   const { data } = supabase.storage.from(SUPABASE_BUCKET).getPublicUrl(path);
   return data?.publicUrl || null;
 }
-
-export async function uploadFile(file, prefix = 'doc') {
-  if (!supabase) throw new Error('Supabase is not configured.');
-  const ext = (file.name.split('.').pop() || 'bin').toLowerCase();
-  const key = `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
-  const { error } = await supabase.storage
-    .from(SUPABASE_BUCKET)
-    .upload(key, file, { cacheControl: '3600', upsert: false });
-  if (error) throw error;
-  return { path: key, url: publicFileUrl(key) };
-}

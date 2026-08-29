@@ -133,6 +133,29 @@
 .icon-btn:hover { background: var(--primary); border-color: var(--primary); color: #fff; }
 .menu-btn { display: none; }
 
+.live-pill {
+  align-items: center;
+  background: var(--primary-light);
+  border-radius: var(--radius-pill);
+  color: var(--primary);
+  display: inline-flex;
+  font-size: 0.688rem;
+  font-weight: 700;
+  gap: 0.4rem;
+  letter-spacing: 0.3px;
+  padding: 0.35rem 0.8rem;
+  text-transform: uppercase;
+}
+.live-pill::before {
+  animation: pulse 1.8s ease-in-out infinite;
+  background: var(--success);
+  border-radius: 50%;
+  content: '';
+  height: 7px;
+  width: 7px;
+}
+body.dark-mode .live-pill { color: var(--accent); }
+
 .topbar-user { align-items: center; display: flex; gap: 0.6rem; }
 .user-avatar {
   align-items: center;
@@ -170,7 +193,7 @@
   .sidebar-close { display: block; }
   .menu-btn { display: flex; }
   .dash-content { padding: 1.25rem; }
-  .user-meta { display: none; }
+  .live-pill { display: none; }
 }
 
 @media (max-width: 575px) {

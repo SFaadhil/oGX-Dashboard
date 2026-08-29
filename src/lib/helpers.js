@@ -1,5 +1,3 @@
-import { VP_KEY_AREAS, TEAM_LEADER_KEY_AREAS } from '../constants';
-
 export function initials(name = '') {
   const parts = String(name).trim().split(/\s+/).filter(Boolean);
   if (!parts.length) return '?';
@@ -54,18 +52,6 @@ export function toArray(value) {
     return trimmed.split(',').map((s) => s.trim()).filter(Boolean);
   }
   return [value];
-}
-
-export function isVP(manager) {
-  if (!manager) return false;
-  return VP_KEY_AREAS.some((k) => String(manager.key_area || '').toLowerCase() === k.toLowerCase());
-}
-
-export function isTeamLeader(manager) {
-  if (!manager) return false;
-  return TEAM_LEADER_KEY_AREAS.some(
-    (k) => String(manager.key_area || '').toLowerCase() === k.toLowerCase()
-  );
 }
 
 export function percent(part, total) {

@@ -200,6 +200,7 @@ export async function runSync({
   perPage = 100,
   dryRun = false,
   mirrorCvs = false,
+  publishToPool = false,
   bucket = 'lead_documents',
   onProgress = () => {}
 }) {
@@ -216,7 +217,7 @@ export async function runSync({
       stats.fetched += rows.length;
       onProgress({ ...meta, fetched: stats.fetched });
 
-      const mapped = rows.map(mapApplication).filter((m) => {
+      const mapped = rows.map((r) => mapApplication(r, { publishToPool })).filter((m) => {
         if (!m.expaFields.product) { stats.skipped += 1; return false; }
         return true;
       });

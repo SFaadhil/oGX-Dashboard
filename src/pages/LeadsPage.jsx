@@ -1,17 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  FiSearch, FiFilter, FiX, FiDownload, FiUpload, FiColumns, FiEye, FiEdit2,
-  FiRefreshCw, FiAlertCircle, FiCheckSquare, FiSquare, FiInbox, FiExternalLink, FiLock
+  FiSearch, FiFilter, FiX, FiDownload, FiColumns, FiEye, FiRefreshCw,
+  FiAlertCircle, FiInbox, FiExternalLink
 } from 'react-icons/fi';
 import MultiSelect from '../components/MultiSelect';
 import Modal from '../components/Modal';
-import LeadEditor from '../components/LeadEditor';
-import CSVImport from '../components/CSVImport';
-import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
-import { fetchLeads, fetchManagers, logAction } from '../lib/leadsApi';
-import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
+import { fetchLeads, fetchManagers } from '../lib/leadsApi';
 import {
   PRODUCTS, YEARS, REGIONS, COUNTRIES, DURATIONS, LEAD_STATUSES, STATUS_TONE, DATE_RANGES
 } from '../constants';
@@ -21,24 +17,28 @@ const ALL_COLUMNS = [
   { key: 'name', label: 'Name', always: true },
   { key: 'lead_id', label: 'EP ID' },
   { key: 'product', label: 'Product' },
+  { key: 'sub_product', label: 'Sub product' },
   { key: 'status', label: 'Status' },
-  { key: 'manager', label: 'Manager' },
+  { key: 'manager', label: 'EP Manager' },
   { key: 'university', label: 'University' },
   { key: 'year', label: 'Year' },
   { key: 'email', label: 'Email' },
   { key: 'phone', label: 'Phone' },
   { key: 'duration', label: 'Duration' },
-  { key: 'regions', label: 'Desired Regions' },
-  { key: 'expa', label: 'EXPA' },
+  { key: 'opportunity', label: 'Opportunity' },
+  { key: 'host', label: 'Destination' },
   { key: 'pool', label: 'CV Pool' },
-  { key: 'created', label: 'Created' }
+  { key: 'applied', label: 'Applied' }
 ];
 
-const DEFAULT_COLUMNS = ['name', 'product', 'status', 'manager', 'university', 'expa', 'created'];
-const EMPTY_FILTERS = { product: [], year: [], status: [], region: [], country: [], duration: [], manager: [] };
+const DEFAULT_COLUMNS = ['name', 'product', 'status', 'manager', 'university', 'host', 'applied'];
+const EMPTY_FILTERS = {
+  product: [], year: [], status: [], region: [], country: [], duration: [], manager: [], host: []
+};
 
-export default function LeadsPage({ scope = 'mine' }) {
-  const { manager, isVP } = useAuth();
+const PAGE = 100;
+
+export default function LeadsPage() {
   const toast = useToast();
 
   const [leads, setLeads] = useState([]);
@@ -52,25 +52,18 @@ export default function LeadsPage({ scope = 'mine' }) {
   const [showFilters, setShowFilters] = useState(false);
   const [columns, setColumns] = useState(DEFAULT_COLUMNS);
   const [showColumns, setShowColumns] = useState(false);
-  const [selected, setSelected] = useState([]);
-  const [editing, setEditing] = useState(null);
-  const [importing, setImporting] = useState(false);
-
-  const denied = scope === 'all' && !isVP;
+  const [visible, setVisible] = useState(PAGE);
 
   const load = useCallback(async () => {
-    if (denied) { setLoading(false); return; }
     setLoading(true);
     setError(null);
-    const { rows, error: err } = await fetchLeads({
-      filter: (q) => (scope === 'all' ? q : q.eq('manager_id', manager?.id))
-    });
+    const { rows, error: err } = await fetchLeads();
     if (err) setError(err);
     setLeads(rows);
     const { rows: mgrs } = await fetchManagers('id, first_name, last_name, email, key_area, ogt');
     setManagers(mgrs);
     setLoading(false);
-  }, [scope, manager?.id, denied]);
+  }, []);
 
   useEffect(() => { load(); }, [load]);
 
@@ -96,13 +89,19 @@ export default function LeadsPage({ scope = 'mine' }) {
     [managers]
   );
 
+  const hostOptions = useMemo(() => {
+    const set = new Set();
+    leads.forEach((l) => l.host_mc && set.add(l.host_mc));
+    return [...set].sort().map((v) => ({ value: v, label: v }));
+  }, [leads]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const cutoff = dateRange === 'all' ? null : Date.now() - Number(dateRange) * 86400000;
 
     return leads.filter((l) => {
       if (q) {
-        const hay = [fullName(l), l.email, l.university, l.lead_id, l.phone_number]
+        const hay = [fullName(l), l.email, l.university, l.lead_id, l.phone_number, l.opportunity_title]
           .filter(Boolean).join(' ').toLowerCase();
         if (!hay.includes(q)) return false;
       }
@@ -110,6 +109,7 @@ export default function LeadsPage({ scope = 'mine' }) {
       if (filters.status.length && !filters.status.includes(l.status || 'Not Contacted')) return false;
       if (filters.duration.length && !filters.duration.includes(l.duration)) return false;
       if (filters.manager.length && !filters.manager.includes(l.manager_id)) return false;
+      if (filters.host.length && !filters.host.includes(l.host_mc)) return false;
       if (filters.year.length) {
         const y = l.year_of_studies == null ? null : String(l.year_of_studies);
         if (!y || !filters.year.includes(y)) return false;
@@ -122,10 +122,12 @@ export default function LeadsPage({ scope = 'mine' }) {
         const countries = toArray(l.desired_countries);
         if (!filters.country.some((c) => countries.includes(c))) return false;
       }
-      if (cutoff && new Date(l.created_at || 0).getTime() < cutoff) return false;
+      if (cutoff && new Date(l.applied_at || l.created_at || 0).getTime() < cutoff) return false;
       return true;
     });
   }, [leads, search, filters, dateRange]);
+
+  useEffect(() => { setVisible(PAGE); }, [search, filters, dateRange]);
 
   const activeCount = useMemo(
     () => Object.values(filters).reduce((n, arr) => n + arr.length, 0) + (dateRange !== 'all' ? 1 : 0),
@@ -134,21 +136,6 @@ export default function LeadsPage({ scope = 'mine' }) {
 
   const setFilter = (key, value) => setFilters((f) => ({ ...f, [key]: value }));
   const clearAll = () => { setFilters(EMPTY_FILTERS); setDateRange('all'); setSearch(''); };
-
-  const toggleSelect = (id) =>
-    setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
-  const toggleSelectAll = () =>
-    setSelected((s) => (s.length === filtered.length ? [] : filtered.map((l) => l.id)));
-
-  const bulkUpdate = async (patch, label) => {
-    if (!selected.length || !isSupabaseConfigured) return;
-    const { error: err } = await supabase.from('leads').update(patch).in('id', selected);
-    if (err) { toast.error(err.message); return; }
-    await logAction(manager?.id, label, { ids: selected, patch });
-    toast.success(`${selected.length} lead(s) updated.`);
-    setSelected([]);
-    load();
-  };
 
   const exportCSV = () => {
     if (!filtered.length) { toast.info('Nothing to export.'); return; }
@@ -160,51 +147,34 @@ export default function LeadsPage({ scope = 'mine' }) {
         email: l.email || '',
         phone: l.phone_number || '',
         product: l.product || '',
+        sub_product: l.sub_product || '',
         status: l.status || '',
         university: l.university || '',
         year_of_studies: l.year_of_studies || '',
         duration: l.duration || '',
-        desired_regions: toArray(l.desired_regions).join(' | '),
-        desired_countries: toArray(l.desired_countries).join(' | '),
+        opportunity: l.opportunity_title || '',
+        host_lc: l.host_lc || '',
+        host_mc: l.host_mc || '',
         backgrounds: (l.backgrounds || []).map((b) => b.name).join(' | '),
         manager: l.manager ? [l.manager.first_name, l.manager.last_name].join(' ') : '',
-        assigned_on_expa: l.assigned_on_expa ? 'yes' : 'no',
-        show_in_cvpool: l.show_in_cvpool ? 'yes' : 'no',
-        created_at: l.created_at || ''
+        applied_at: l.applied_at || l.created_at || ''
       }))
     );
   };
 
-  if (denied) {
-    return (
-      <div className="access-denied">
-        <FiLock />
-        <h3>Access Denied</h3>
-        <p>Only VPs can view organisation leads.</p>
-      </div>
-    );
-  }
+  const on = (k) => ALL_COLUMNS.find((c) => c.key === k)?.always || columns.includes(k);
 
   return (
     <>
       <div className="page-head">
         <div>
-          <h1 className="page-title">{scope === 'all' ? 'All Leads' : 'My Leads'}</h1>
-          <p className="page-subtitle">
-            {scope === 'all'
-              ? 'Every lead in the entity, across both oGX teams.'
-              : 'Leads currently assigned to you.'}
-          </p>
+          <h1 className="page-title">Leads</h1>
+          <p className="page-subtitle">Every GTa and GTe application, straight from EXPA.</p>
         </div>
         <div className="page-head-actions">
           <button className="btn btn-ghost" onClick={load}><FiRefreshCw /> Refresh</button>
           <button className="btn btn-ghost" onClick={() => setShowColumns(true)}><FiColumns /> Columns</button>
-          <button className="btn btn-ghost" onClick={exportCSV}><FiDownload /> Export CSV</button>
-          {isVP && (
-            <button className="btn btn-primary" onClick={() => setImporting(true)}>
-              <FiUpload /> Import CSV
-            </button>
-          )}
+          <button className="btn btn-primary" onClick={exportCSV}><FiDownload /> Export CSV</button>
         </div>
       </div>
 
@@ -213,13 +183,11 @@ export default function LeadsPage({ scope = 'mine' }) {
           <FiSearch className="search-icon" />
           <input
             className="search-input"
-            placeholder="Search by name, email, EP ID, or university..."
+            placeholder="Search by name, email, EP ID, university, or opportunity..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          {search && (
-            <button className="search-clear" onClick={() => setSearch('')}><FiX /></button>
-          )}
+          {search && <button className="search-clear" onClick={() => setSearch('')}><FiX /></button>}
         </div>
         <select value={dateRange} onChange={(e) => setDateRange(e.target.value)}>
           {DATE_RANGES.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
@@ -262,6 +230,11 @@ export default function LeadsPage({ scope = 'mine' }) {
                 onChange={(v) => setFilter('duration', v)} placeholder="Select duration" searchable={false} />
             </div>
             <div className="filter-group">
+              <label>Destination MC</label>
+              <MultiSelect options={hostOptions} selected={filters.host}
+                onChange={(v) => setFilter('host', v)} placeholder="Select destination" />
+            </div>
+            <div className="filter-group">
               <label>Desired Regions</label>
               <MultiSelect options={REGIONS} selected={filters.region}
                 onChange={(v) => setFilter('region', v)} placeholder="Select regions" />
@@ -271,35 +244,18 @@ export default function LeadsPage({ scope = 'mine' }) {
               <MultiSelect options={COUNTRIES} selected={filters.country}
                 onChange={(v) => setFilter('country', v)} placeholder="Select countries" />
             </div>
-            {scope === 'all' && (
-              <div className="filter-group full-width">
-                <label>Manager</label>
-                <MultiSelect options={managerOptions} selected={filters.manager}
-                  onChange={(v) => setFilter('manager', v)} placeholder="All Managers" />
-              </div>
-            )}
+            <div className="filter-group full-width">
+              <label>EP Manager</label>
+              <MultiSelect options={managerOptions} selected={filters.manager}
+                onChange={(v) => setFilter('manager', v)} placeholder="All Managers" />
+            </div>
           </div>
         </div>
       )}
 
-      {selected.length > 0 && (
-        <div className="toolbar" style={{ borderColor: 'var(--primary)' }}>
-          <span className="select-count">{selected.length} selected</span>
-          <button className="btn btn-sm btn-ghost" onClick={() => bulkUpdate({ show_in_cvpool: true }, 'cvpool_show')}>
-            Add to CV Pool
-          </button>
-          <button className="btn btn-sm btn-ghost" onClick={() => bulkUpdate({ show_in_cvpool: false }, 'cvpool_hide')}>
-            Remove from CV Pool
-          </button>
-          <button className="btn btn-sm btn-ghost" onClick={() => bulkUpdate({ assigned_on_expa: true }, 'expa_assigned')}>
-            Mark assigned on EXPA
-          </button>
-          <button className="btn btn-sm btn-ghost" onClick={() => setSelected([])}><FiX /> Clear</button>
-        </div>
-      )}
-
       <div className="results-info">
-        Showing <strong>{filtered.length}</strong> of <strong>{leads.length}</strong> leads
+        Showing <strong>{Math.min(visible, filtered.length)}</strong> of <strong>{filtered.length}</strong>
+        {filtered.length !== leads.length && <span> (filtered from {leads.length})</span>}
       </div>
 
       {loading ? (
@@ -313,35 +269,24 @@ export default function LeadsPage({ scope = 'mine' }) {
         <div className="empty-state">
           <FiInbox /><h3>No leads found</h3>
           <p>No leads match your current filters.</p>
-          <button className="btn btn-primary" onClick={clearAll}>Clear Filters</button>
+          {activeCount > 0 && <button className="btn btn-primary" onClick={clearAll}>Clear Filters</button>}
         </div>
       ) : (
-        <div className="panel">
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th style={{ width: 42 }}>
-                    <button className="row-btn" onClick={toggleSelectAll} aria-label="Select all">
-                      {selected.length === filtered.length ? <FiCheckSquare /> : <FiSquare />}
-                    </button>
-                  </th>
-                  {ALL_COLUMNS.filter((c) => c.always || columns.includes(c.key)).map((c) => (
-                    <th key={c.key}>{c.label}</th>
-                  ))}
-                  <th style={{ width: 90 }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((l) => {
-                  const on = (k) => ALL_COLUMNS.find((c) => c.key === k)?.always || columns.includes(k);
-                  return (
+        <>
+          <div className="panel">
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    {ALL_COLUMNS.filter((c) => c.always || columns.includes(c.key)).map((c) => (
+                      <th key={c.key}>{c.label}</th>
+                    ))}
+                    <th style={{ width: 80 }}>View</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.slice(0, visible).map((l) => (
                     <tr key={l.id}>
-                      <td>
-                        <button className="row-btn" onClick={() => toggleSelect(l.id)} aria-label="Select row">
-                          {selected.includes(l.id) ? <FiCheckSquare /> : <FiSquare />}
-                        </button>
-                      </td>
                       {on('name') && (
                         <td>
                           <Link className="lead-name-cell" to={`/lead/${l.id}`}>
@@ -358,6 +303,7 @@ export default function LeadsPage({ scope = 'mine' }) {
                             : '-'}
                         </td>
                       )}
+                      {on('sub_product') && <td>{l.sub_product || '-'}</td>}
                       {on('status') && (
                         <td>
                           <span className={`badge ${STATUS_TONE[l.status] || 'badge-neutral'}`}>
@@ -373,13 +319,9 @@ export default function LeadsPage({ scope = 'mine' }) {
                       {on('email') && <td>{l.email || '-'}</td>}
                       {on('phone') && <td>{l.phone_number || '-'}</td>}
                       {on('duration') && <td>{l.duration || '-'}</td>}
-                      {on('regions') && <td>{toArray(l.desired_regions).join(', ') || '-'}</td>}
-                      {on('expa') && (
-                        <td>
-                          <span className={`badge ${l.assigned_on_expa ? 'badge-success' : 'badge-warning'}`}>
-                            {l.assigned_on_expa ? 'Assigned' : 'Pending'}
-                          </span>
-                        </td>
+                      {on('opportunity') && <td>{l.opportunity_title || '-'}</td>}
+                      {on('host') && (
+                        <td>{[l.host_lc, l.host_mc].filter(Boolean).join(', ') || '-'}</td>
                       )}
                       {on('pool') && (
                         <td>
@@ -388,11 +330,10 @@ export default function LeadsPage({ scope = 'mine' }) {
                           </span>
                         </td>
                       )}
-                      {on('created') && <td>{formatDate(l.created_at) || '-'}</td>}
+                      {on('applied') && <td>{formatDate(l.applied_at || l.created_at) || '-'}</td>}
                       <td>
                         <div className="row-actions">
                           <Link className="row-btn" to={`/lead/${l.id}`} title="View"><FiEye /></Link>
-                          <button className="row-btn" onClick={() => setEditing(l)} title="Edit"><FiEdit2 /></button>
                           {l.cv_url && (
                             <a className="row-btn" href={l.cv_url} target="_blank" rel="noopener noreferrer" title="CV">
                               <FiExternalLink />
@@ -401,12 +342,20 @@ export default function LeadsPage({ scope = 'mine' }) {
                         </div>
                       </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+
+          {visible < filtered.length && (
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1.25rem' }}>
+              <button className="btn btn-ghost" onClick={() => setVisible((v) => v + PAGE)}>
+                Load {Math.min(PAGE, filtered.length - visible)} more
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       <Modal open={showColumns} title="Customize Columns" onClose={() => setShowColumns(false)} width={480}>
@@ -416,6 +365,7 @@ export default function LeadsPage({ scope = 'mine' }) {
               key={c.key}
               className={`chip${c.always || columns.includes(c.key) ? ' on' : ''}`}
               disabled={c.always}
+              style={{ cursor: c.always ? 'default' : 'pointer' }}
               onClick={() =>
                 saveColumns(columns.includes(c.key) ? columns.filter((k) => k !== c.key) : [...columns, c.key])}
             >
@@ -424,20 +374,6 @@ export default function LeadsPage({ scope = 'mine' }) {
           ))}
         </div>
       </Modal>
-
-      <LeadEditor
-        lead={editing}
-        managers={managers}
-        onClose={() => setEditing(null)}
-        onSaved={() => { setEditing(null); load(); }}
-      />
-
-      <CSVImport
-        open={importing}
-        managers={managers}
-        onClose={() => setImporting(false)}
-        onImported={() => { setImporting(false); load(); }}
-      />
     </>
   );
 }

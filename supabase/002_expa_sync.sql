@@ -30,11 +30,6 @@ create index if not exists leads_expa_person_idx on public.leads (expa_person_id
 create index if not exists leads_applied_at_idx  on public.leads (applied_at desc);
 create index if not exists leads_synced_at_idx   on public.leads (synced_at desc);
 
--- Backgrounds are matched by name. `backgrounds.name` already carries a UNIQUE
--- constraint from schema.sql (that is the ON CONFLICT target the sync uses);
--- this index just makes the case-insensitive lookup cheap.
-create index if not exists backgrounds_name_lower_idx on public.backgrounds (lower(name));
-
 -- A lead should not accumulate duplicate CV rows across hourly runs. The
 -- constraint is (lead_id, doc_type, source) so a manual upload and the synced
 -- EXPA copy can coexist - the newer row is the one the UI shows.
@@ -78,6 +73,3 @@ create table if not exists public.sync_runs (
 );
 create index if not exists sync_runs_started_idx on public.sync_runs (started_at desc);
 
-alter table public.sync_runs disable row level security;
-
--- The sync writes with the service-role key, which bypasses RLS anyway.

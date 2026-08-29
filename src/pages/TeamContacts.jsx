@@ -98,7 +98,6 @@ export default function TeamContacts() {
                 <div className="member-meta">
                   {m.ogt && <span className="chip on">{m.ogt}</span>}
                   <span className="chip">{counts[m.id] || 0} leads</span>
-                  {m.expa_id && <span className="chip">EXPA {m.expa_id}</span>}
                 </div>
                 <div className="member-actions">
                   {m.email && (

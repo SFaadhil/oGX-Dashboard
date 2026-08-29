@@ -3,13 +3,11 @@ import { Link } from 'react-router-dom';
 import {
   FiTrendingUp, FiUsers, FiAward, FiTarget, FiRefreshCw, FiInbox, FiArrowRight
 } from 'react-icons/fi';
-import { useAuth } from '../context/AuthContext';
 import { fetchLeads, fetchManagers } from '../lib/leadsApi';
 import { percent, initials, countBy } from '../lib/helpers';
 import { DATE_RANGES, PRODUCT_COLORS } from '../constants';
 
 export default function TeamPerformance() {
-  const { manager, isTeamLeader } = useAuth();
   const [leads, setLeads] = useState([]);
   const [managers, setManagers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -47,7 +45,7 @@ export default function TeamPerformance() {
       if (l.status && l.status !== 'Not Contacted') b.contacted += 1;
       if (['Applied', 'Approved'].includes(l.status)) b.applied += 1;
       if (l.status === 'Approved') b.approved += 1;
-      if (l.assigned_on_expa) b.expa += 1;
+      if (l.cv_url) b.expa += 1;
       if (l.show_in_cvpool) b.pool += 1;
     });
 
@@ -73,7 +71,6 @@ export default function TeamPerformance() {
     return { total, contacted, applied, rate: percent(applied, total), products };
   }, [scoped]);
 
-  const mine = rows.find((r) => r.id === manager?.id);
   const maxTotal = Math.max(1, ...rows.map((r) => r.total));
 
   if (loading) {
@@ -124,14 +121,6 @@ export default function TeamPerformance() {
           <span className="tile-value">{totals.rate}%</span>
           <span className="tile-label">Team Rate</span>
         </div>
-        {mine && (
-          <div className="tile">
-            <div className="tile-icon"><FiAward /></div>
-            <span className="tile-value">{mine.rate}%</span>
-            <span className="tile-label">My Performance</span>
-            <span className="tile-sub">{mine.total} leads owned</span>
-          </div>
-        )}
       </div>
 
       <div className="two-col">
@@ -148,13 +137,13 @@ export default function TeamPerformance() {
                 <thead>
                   <tr>
                     <th>#</th><th>Member</th><th>Leads</th><th>Contacted</th>
-                    <th>Applied</th><th>Approved</th><th>On EXPA</th><th>Rate</th>
-                    {isTeamLeader && <th style={{ width: 60 }} />}
+                    <th>Applied</th><th>Approved</th><th>With CV</th><th>Rate</th>
+                    <th style={{ width: 60 }} />
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((r, i) => (
-                    <tr key={r.id} className={r.id === manager?.id ? 'is-me' : undefined}>
+                    <tr key={r.id}>
                       <td>{i + 1}</td>
                       <td>
                         <div className="lead-name-cell">
@@ -172,11 +161,9 @@ export default function TeamPerformance() {
                           {r.rate}%
                         </span>
                       </td>
-                      {isTeamLeader && (
-                        <td>
-                          <Link className="row-btn" to={`/dashboard/team-leads/${r.id}`}><FiArrowRight /></Link>
-                        </td>
-                      )}
+                      <td>
+                        <Link className="row-btn" to={`/dashboard/team-leads/${r.id}`}><FiArrowRight /></Link>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

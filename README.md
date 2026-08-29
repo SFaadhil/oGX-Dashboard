@@ -32,6 +32,10 @@ npm run dev
 Every page degrades to an explicit "Supabase is not configured" state until those
 two values are real, so the app never white-screens while you are setting it up.
 
+The anon key is safe in the browser here: RLS grants it `SELECT` only, and
+write privileges are revoked from the `anon` role. Never put the service-role
+key in a `VITE_` variable - it bypasses RLS.
+
 ## Database
 
 Paste **`supabase/setup.sql`** into the Supabase SQL editor and run it. That one
@@ -57,63 +61,79 @@ The individual migrations are kept separately too: `schema.sql` (base),
 `verify.sql` (health check) and `reset.sql` (**destructive** - drops every
 table; only for a clean slate before real data exists).
 
-Tables: `managers`, `manager_profiles`, `leads`, `backgrounds`,
-`lead_backgrounds`, `lead_documents`, `lead_proofs`, `lead_notes`, `followups`,
-`approval_requests`, `action_logs`, `app_settings`.
+Tables: `managers`, `leads`, `backgrounds`, `lead_backgrounds`,
+`lead_documents`, `app_settings`, `sync_runs`.
 
 If the AIESEC in India project already has these tables, skip the schema and just
 make sure the column names match `supabase/schema.sql`.
 
 ## Routes
 
-| Path | What it is | Access |
-| --- | --- | --- |
-| `/cv-pool` | Public talent pool: stats, charts, filters, CV cards | Anyone |
-| `/login` | Sign in against the `managers` table | Anyone |
-| `/dashboard` | Pipeline overview | Signed in |
-| `/dashboard/leads` | My Leads: filters, column picker, CSV export | Signed in |
-| `/dashboard/all-leads` | Every lead in the entity, plus CSV import | LCVP / Admin |
-| `/dashboard/followups` | Follow-up queue with priorities | Signed in |
-| `/dashboard/lead-assignment` | Bulk assign / auto-distribute leads | LCVP / Admin |
-| `/dashboard/all-team-leads` | Leads across the whole team | Team leader+ |
-| `/dashboard/team` | Team contact cards | Signed in |
-| `/dashboard/team-leads/:memberId` | One member's leads | Signed in |
-| `/dashboard/team-performance` | Leaderboard and conversion metrics | Signed in |
-| `/dashboard/approvals` | Approval request inbox | Signed in |
-| `/dashboard/admin` | Members, backgrounds, CV pool switch, audit log | LCVP / Admin |
-| `/dashboard/settings` | Profile, theme, password | Signed in |
-| `/lead/:id` | Full lead record: notes, CV, proofs, assignment | Signed in |
+Every route is public. There is no login, and nothing in the browser writes to
+the database.
 
-The old flat paths (`/leads`, `/team`, `/admin`, ...) redirect to their
-`/dashboard/...` equivalents.
+| Path | What it is |
+| --- | --- |
+| `/cv-pool` | Talent pool: stats, charts, filters, CV cards |
+| `/dashboard` | Pipeline overview: totals, product split, destinations |
+| `/dashboard/leads` | Every application, with filters, column picker and CSV export |
+| `/dashboard/team` | Team contact cards |
+| `/dashboard/team-leads/:memberId` | One EP manager's leads |
+| `/dashboard/team-performance` | Per-manager leaderboard |
+| `/dashboard/sync` | EXPA sync health and run history |
+| `/lead/:id` | Full application record |
 
-## Roles
+Older paths (`/leads`, `/login`, `/admin`, ...) redirect into `/dashboard/...`.
 
-Access is derived from `managers.key_area` (see `src/constants/index.js`):
+## Read-only by design
 
-- `LCVP oGX` and `Administrator` unlock everything (treated as VP).
-- `oGX Team Leader` additionally unlocks team-wide views and approvals.
-- Everyone else sees their own leads, follow-ups, team contacts and performance.
+The dashboard is open to everyone, so it is read-only end to end:
 
-`managers.reports_to` decides who receives a member's approval requests.
+- No login, no session, no roles.
+- `src/lib/leadsApi.js` contains no `insert` / `update` / `delete`. The only
+  Supabase call outside `select` is `getPublicUrl`, which builds a URL string.
+- RLS is on for every table with a `SELECT`-only policy, and `INSERT`,
+  `UPDATE`, `DELETE` are revoked from the `anon` role outright.
+- The single writer is `scripts/sync-expa.mjs`, which runs server-side with the
+  service-role key.
+
+`supabase/verify.sql` checks all of this and prints any table where the anon
+role still holds a write grant.
 
 ## Products
 
-`GTa` and `GTe` are the only two products. They drive the card sticker, the donut
-chart, and every product filter. GTa renders in brand maroon, GTe in brand
-yellow - see `PRODUCT_COLORS` in `src/constants/index.js`.
+`GTa` and `GTe` are the only two products, mapped from EXPA programme ids 8 and
+9. They drive the card sticker, the donut chart and every product filter. GTa
+renders in brand maroon, GTe in brand yellow - see `PRODUCT_COLORS` in
+`src/constants/index.js`.
 
-## Closing the CV pool
+## What appears on the public CV pool
 
-Admin Panel -> CV Pool Access flips `app_settings.cv_pool_open`. When it is
-`false`, `/cv-pool` shows the "currently closed" notice instead of the grid.
+`/cv-pool` shows only leads with `show_in_cvpool = true`. Newly synced
+applicants are `false` unless the sync runs with `--publish` or
+`EXPA_PUBLISH_TO_POOL=true`.
+
+To publish everything already in the database:
+
+```sql
+update public.leads set show_in_cvpool = true where product in ('GTa', 'GTe');
+```
+
+To take the whole pool offline without touching the data, flip the setting the
+page checks on load:
+
+```sql
+update public.app_settings set value = 'false' where key = 'cv_pool_open';
+```
+
+Bear in mind the rest of the dashboard is public too, so `show_in_cvpool`
+controls presentation, not access. Anything in `leads` is readable by anyone
+with the URL.
 
 ## Theme
 
-Design tokens live in `src/styles/variables.css`. Dark mode swaps the token block
-under `html.dark-mode`; the same class is mirrored onto `<body>` for the handful
-of `body.dark-mode .x` component rules. The preference is stored in
-`localStorage` and, for signed-in users, in `manager_profiles.theme_preference`.
+Design tokens live in `src/styles/variables.css`. Dark mode swaps the token
+block under `body.dark-mode` and the preference is stored in `localStorage`.
 
 ## Build
 
@@ -121,19 +141,8 @@ of `body.dark-mode .x` component rules. The preference is stored in
 npm run build
 ```
 
-Output lands in `dist/`. Deploy it anywhere that serves a SPA fallback to
+Output lands in `dist/`. Deploy anywhere that serves a SPA fallback to
 `index.html` (Vercel, Netlify, Cloudflare Pages).
-
-## Notes on the login model
-
-Like the reference deployment, sign-in reads a plaintext password column on
-`managers` rather than Supabase Auth, and RLS is left off so the anon key can
-read and write. That is why the schema keeps RLS disabled. If you want this
-hardened, move authentication to Supabase Auth and re-enable RLS with policies
-keyed on `auth.uid()`; `src/context/AuthContext.jsx` is the only file that would
-need to change.
-
----
 
 ## Live EXPA sync
 
@@ -201,14 +210,12 @@ Re-running is safe. Rows are keyed on `leads.expa_application_id`, and an
 existing lead only gets its **EXPA-owned** columns refreshed. These stay under
 your team's control and are never overwritten:
 
-`manager_id`, `status`, `show_in_cvpool`, `feedback_status`, `manager_feedback`,
-`assigned_on_expa`, and everything in `lead_notes` / `lead_proofs`.
+`manager_id`, `status` and `show_in_cvpool`.
 
-**New leads land with `show_in_cvpool = false`.** Nothing an applicant submits
-becomes publicly visible until someone on the team opts that lead in from the
-dashboard. Given the volume in EXPA, do not flip this default without deciding
-what you are comfortable publishing - the CV pool page is open to anyone with
-the link and shows names, emails, phone numbers and CVs.
+**New leads land with `show_in_cvpool = false`** unless you pass `--publish` or
+set `EXPA_PUBLISH_TO_POOL=true`. See "What appears on the public CV pool" above
+before turning that on: the whole site is public, and at EXPA's volume that is
+tens of thousands of applicants' names, emails, phone numbers and CVs.
 
 ### CV links
 
