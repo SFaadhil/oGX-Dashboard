@@ -80,3 +80,26 @@ where grantee = 'anon'
   and table_schema = 'public'
   and privilege_type <> 'SELECT'
 order by table_name, privilege_type;
+
+-- ------------------------------------------------- ON CONFLICT targets -----
+-- Every upsert target the sync uses must be a REAL unique constraint. A
+-- partial unique index will NOT work: Postgres rejects it as an ON CONFLICT
+-- target unless the statement repeats its WHERE clause, which PostgREST
+-- cannot do. All five rows must appear here.
+select
+  t.relname   as table_name,
+  c.conname   as constraint_name,
+  pg_get_constraintdef(c.oid) as definition
+from pg_constraint c
+join pg_class t     on t.oid = c.conrelid
+join pg_namespace n on n.oid = t.relnamespace
+where n.nspname = 'public'
+  and c.contype in ('u', 'p')
+  and c.conname in (
+    'leads_expa_application_id_key',      -- onConflict: expa_application_id
+    'managers_expa_id_key',               -- onConflict: expa_id
+    'backgrounds_name_key',               -- onConflict: name
+    'lead_backgrounds_pkey',              -- onConflict: lead_id,background_id
+    'lead_documents_lead_type_source_key' -- onConflict: lead_id,doc_type,source
+  )
+order by t.relname;

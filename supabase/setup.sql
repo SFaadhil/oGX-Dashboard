@@ -10,7 +10,7 @@
 -- statement errors, nothing at all is applied. Fix it and run again.
 --
 -- Part 1 = base schema (tables, columns, indexes, storage bucket, seeds)
--- Part 2 = EXPA sync additions (lead columns, manager keys, sync_runs)
+-- Part 2 = EXPA sync additions (lead columns, unique keys, sync_runs)
 -- Part 3 = public read-only lockdown (RLS + revoked write grants)
 --
 -- There is no login and no admin account to create. Everything is public
@@ -194,11 +194,16 @@ alter table public.leads add column if not exists applied_at          timestampt
 alter table public.leads add column if not exists synced_at           timestamptz;
 alter table public.leads add column if not exists source              text default 'manual';
 
--- One row per EXPA application. Partial index so manually created leads
--- (which have no EXPA id) are unaffected.
-create unique index if not exists leads_expa_application_key
-  on public.leads (expa_application_id)
-  where expa_application_id is not null;
+-- One row per EXPA application. This MUST be a real constraint, not a partial
+-- unique index: Postgres will not accept a partial index as an ON CONFLICT
+-- target unless the statement repeats its WHERE clause, which PostgREST cannot
+-- express. A plain UNIQUE already allows many NULLs, so manually created leads
+-- (which have no EXPA id) are unaffected either way.
+drop index if exists public.leads_expa_application_key;
+alter table public.leads
+  drop constraint if exists leads_expa_application_id_key;
+alter table public.leads
+  add constraint leads_expa_application_id_key unique (expa_application_id);
 
 create index if not exists leads_expa_person_idx on public.leads (expa_person_id);
 create index if not exists leads_applied_at_idx  on public.leads (applied_at desc);
@@ -234,11 +239,16 @@ alter table public.lead_documents
 -- their EXPA person id. Email is not always present on those records, so it
 -- cannot stay NOT NULL.
 alter table public.managers alter column email drop not null;
+
+-- Both of these are ON CONFLICT targets (expa_id) or may become one, so they
+-- are real constraints rather than partial indexes. UNIQUE permits multiple
+-- NULLs, which is what lets managers exist without an email or an EXPA id.
+drop index if exists public.managers_email_key;
+drop index if exists public.managers_expa_id_key;
 alter table public.managers drop constraint if exists managers_email_key;
-create unique index if not exists managers_email_key
-  on public.managers (email) where email is not null;
-create unique index if not exists managers_expa_id_key
-  on public.managers (expa_id) where expa_id is not null;
+alter table public.managers add constraint managers_email_key unique (email);
+alter table public.managers drop constraint if exists managers_expa_id_key;
+alter table public.managers add constraint managers_expa_id_key unique (expa_id);
 
 -- ------------------------------------------------------------- sync runs ----
 create table if not exists public.sync_runs (
